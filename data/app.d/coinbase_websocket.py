@@ -88,7 +88,7 @@ def coinbase_websocket_connector(product_ids, channels, types):
                         else:
                             value = msg[key]
                         row_to_write.append(value)
-                    dtw.write_row(row_to_write)
+                    dtw.write_row(*row_to_write)
 
         try:
             if ws:
