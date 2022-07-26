@@ -31,6 +31,59 @@ dtw_columns = {
     'time': dht.DateTime
 }
 
+def websocket_keepalive(ws, interval=30):
+    while ws.connected:
+        ws.ping("keepalive")
+        time.sleep(interval)
+
+def websocket_thread(dtw, product_ids, channels, types):
+    thread_running = True
+
+    ws = create_connection("wss://ws-feed.exchange.coinbase.com")
+    ws.send(
+        json.dumps(
+            {
+                "type": "subscribe",
+                "product_ids": product_ids,
+                "channels": channels,
+            }
+        )
+    )
+
+    thread_keepalive = Thread(target=websocket_keepalive, args=(ws,))
+    thread_keepalive.start()
+    while thread_running:
+        try:
+            data = ws.recv()
+            if data != "":
+                msg = json.loads(data)
+            else:
+                msg = {}
+        except ValueError as e:
+            print(e)
+            print("{} - data: {}".format(e, data))
+        except Exception as e:
+            print(e)
+            print("{} - data: {}".format(e, data))
+        else:
+            if "type" in msg and msg["type"] in types:
+                row_to_write = []
+                for key in msg.keys():
+                    value = None
+                    if key in dtw_column_converter:
+                        value = dtw_column_converter[key](msg[key])
+                    else:
+                        value = msg[key]
+                    row_to_write.append(value)
+                dtw.write_row(*row_to_write)
+
+    try:
+        if ws:
+            ws.close()
+    except WebSocketConnectionClosedException:
+        pass
+    finally:
+        thread_keepalive.join()
 
 def coinbase_websocket_connector(product_ids, channels, types):
     """
@@ -44,68 +97,9 @@ def coinbase_websocket_connector(product_ids, channels, types):
     Returns:
         None
     """
-    ws = None
-    thread = None
-    thread_running = False
-    thread_keepalive = None
     dtw = DynamicTableWriter(dtw_columns)
 
-    def websocket_thread():
-        global ws
-
-        ws = create_connection("wss://ws-feed.exchange.coinbase.com")
-        ws.send(
-            json.dumps(
-                {
-                    "type": "subscribe",
-                    "product_ids": product_ids,
-                    "channels": channels,
-                }
-            )
-        )
-
-        thread_keepalive.start()
-        while not thread_running:
-            try:
-                data = ws.recv()
-                if data != "":
-                    msg = json.loads(data)
-                else:
-                    msg = {}
-            except ValueError as e:
-                print(e)
-                print("{} - data: {}".format(e, data))
-            except Exception as e:
-                print(e)
-                print("{} - data: {}".format(e, data))
-            else:
-                if "type" in msg and msg["type"] in types:
-                    row_to_write = []
-                    for key in msg.keys():
-                        value = None
-                        if key in dtw_column_converter:
-                            value = dtw_column_converter[key](msg[key])
-                        else:
-                            value = msg[key]
-                        row_to_write.append(value)
-                    dtw.write_row(*row_to_write)
-
-        try:
-            if ws:
-                ws.close()
-        except WebSocketConnectionClosedException:
-            pass
-        finally:
-            thread_keepalive.join()
-
-    def websocket_keepalive(interval=30):
-        global ws
-        while ws.connected:
-            ws.ping("keepalive")
-            time.sleep(interval)
-
-    thread = Thread(target=websocket_thread)
-    thread_keepalive = Thread(target=websocket_keepalive)
+    thread = Thread(target=websocket_thread, args=(dtw, product_ids, channels, types))
     thread.start()
 
     return dtw.table
