@@ -18,14 +18,6 @@ In the Deephaven IDE (http://localhost:10000), you can call `coinbase_websocket_
 
 ```
 btc_feed = coinbase_websocket_connector(['BTC-USD'], ["matches"], ["last_match", "match"])
-```
-
-```
 eth_feed = coinbase_websocket_connector(['ETH-USD'], ["matches"], ["last_match", "match"])
-```
-
-```
 btc_eth_feed = coinbase_websocket_connector(['ETH-USD', 'BTC-USD'], ["matches"], ["last_match", "match"])
 ```
-
-NOTE: you can only run 1 connection at a time. There is future work to make this project work with multiple connections
